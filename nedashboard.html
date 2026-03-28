@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>care cruise bot
+    
+</title>
+<style>
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #74ebd5, #acb6e5);
+    margin: 0; padding: 0;
+  }
+  h1 {
+    text-align: center; color: #fff; margin: 20px 0; text-shadow: 2px 2px 4px #000;
+  }
+  #dashboard {
+    max-width: 700px; margin: auto;
+    background: rgba(255,255,255,0.95);
+    padding: 25px; border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  }
+  .card {
+    background: #f0f0f0; margin: 15px 0; padding: 15px;
+    border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 18px;
+  }
+  .led {
+    width: 25px; height: 25px; border-radius: 50%; margin-left: 10px;
+    background: grey; box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    transition: background 0.3s;
+  }
+  #progressContainer {
+    background: #ddd; border-radius: 10px; height: 20px; overflow: hidden;
+    margin-top: 20px;
+  }
+  #progressBar {
+    height: 100%; width: 0%; background: linear-gradient(to right, #6dd5ed, #2193b0);
+    transition: width 0.5s;
+  }
+  button {
+    display: block; margin: 20px auto; padding: 12px 25px;
+    border: none; border-radius: 12px; background: #2193b0; color: #fff;
+    font-size: 16px; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    transition: background 0.3s;
+  }
+  button:hover { background: #6dd5ed; }
+</style>
+</head>
+<body>
+
+<h1>Super Robot Dashboard</h1>
+<div id="dashboard">
+  <div class="card">
+    <span>Room Status:</span>
+    <span id="roomStatus">Waiting...</span>
+  </div>
+  <div class="card">
+    <span>Requests Taken:</span>
+    <span id="requestCount">0</span>
+    <div id="requestLed" class="led"></div>
+  </div>
+  <div class="card">
+    <span>Journey Progress:</span>
+    <div id="progressContainer">
+      <div id="progressBar"></div>
+    </div>
+  </div>
+  <div class="card">
+    <span>Buzzer Status:</span>
+    <div id="buzzerLed" class="led"></div>
+  </div>
+  <button id="connectBtn">Connect to Robot</button>
+</div>
+
+<script>
+let port, reader;
+let requestCount = 0;
+let totalRequests = 5; // max number of rooms for progress bar
+
+const roomStatusEl = document.getElementById('roomStatus');
+const requestCountEl = document.getElementById('requestCount');
+const requestLedEl = document.getElementById('requestLed');
+const progressBarEl = document.getElementById('progressBar');
+const buzzerLedEl = document.getElementById('buzzerLed');
+const connectBtn = document.getElementById('connectBtn');
+
+connectBtn.addEventListener('click', async () => {
+  try {
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 9600 });
+
+    const decoder = new TextDecoderStream();
+    port.readable.pipeTo(decoder.writable);
+    reader = decoder.readable.getReader();
+
+    roomStatusEl.textContent = "Connected, waiting for robot...";
+    while(true) {
+      const { value, done } = await reader.read();
+      if(done) break;
+      if(value) handleSerialData(value.trim());
+    }
+  } catch(err) {
+    console.error(err);
+    roomStatusEl.textContent = "Connection failed!";
+  }
+});
+
+function handleSerialData(data) {
+  console.log("Serial:", data);
+
+  // Room detection
+  if(data.includes("Room detected")) {
+    roomStatusEl.textContent = "Room Detected!";
+    requestLedEl.style.background = "yellow";
+    setTimeout(()=>{ requestLedEl.style.background = "grey"; }, 500);
+  }
+
+  // Request taken
+  if(data.includes("Request taken")) {
+    requestCount++;
+    requestCountEl.textContent = requestCount;
+    requestLedEl.style.background = "green";
+
+    // update progress bar
+    let progressPercent = Math.min((requestCount/totalRequests)*100, 100);
+    progressBarEl.style.width = progressPercent + "%";
+
+    setTimeout(()=>{ requestLedEl.style.background = "grey"; }, 500);
+  }
+
+  // Buzzer beep
+  if(data.includes("Buzzer beep")) {
+    buzzerLedEl.style.background = "red";
+    setTimeout(()=>{ buzzerLedEl.style.background = "grey"; }, 500);
+  }
+
+  // Journey complete
+  if(data.includes("Reached pharmacy")) {
+    roomStatusEl.textContent = "Journey Complete!";
+  }
+}
+</script>
+
+</body>
+</html>
